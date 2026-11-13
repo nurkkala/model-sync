@@ -88,3 +88,54 @@ def test_insert_into_a_nested_object_uses_its_members_indent():
 def test_malformed_text_is_refused_with_its_line(text, message):
     with pytest.raises(jsonc.JsoncError, match=message.replace("'", ".")):
         jsonc.parse(text)
+
+
+@pytest.mark.parametrize(
+    ("source", "path", "expected"),
+    [
+        # A middle member on its own line goes with its line and its closing comment.
+        (
+            '{\n  "a": 1,\n  "b": 2, // about b\n  "c": 3\n}\n',
+            ("b",),
+            '{\n  "a": 1,\n  "c": 3\n}\n',
+        ),
+        # The last member has no comma, so the one before it gives its own up.
+        ('{\n  "a": 1,\n  "b": 2\n}\n', ("b",), '{\n  "a": 1\n}\n'),
+        # A trailing comma after the last member is the member's own.
+        ('{\n  "a": 1,\n  "b": 2,\n}\n', ("b",), '{\n  "a": 1,\n}\n'),
+        # A comment on a line of its own stays where it is.
+        (
+            '{\n  // about a\n  "a": 1,\n  // about b\n  "b": 2\n}\n',
+            ("a",),
+            '{\n  // about a\n  // about b\n  "b": 2\n}\n',
+        ),
+        # The comment that closes the previous member's line survives.
+        (
+            '{\n  "a": 1, // about a\n  "b": 2\n}\n',
+            ("b",),
+            '{\n  "a": 1 // about a\n}\n',
+        ),
+        # Inline: first, middle, last, and the one member there is.
+        ('{ "a": 1, "b": 2, "c": 3 }', ("a",), '{ "b": 2, "c": 3 }'),
+        ('{ "a": 1, "b": 2, "c": 3 }', ("b",), '{ "a": 1, "c": 3 }'),
+        ('{ "a": 1, "b": 2, "c": 3 }', ("c",), '{ "a": 1, "b": 2 }'),
+        ('{ "a": 1 }', ("a",), "{ }"),
+        # Nested, and a value that spans lines.
+        (
+            '{\n  "x": { "keep": true, "model": "p/m" },\n  "y": {\n    "z": 1\n  }\n}\n',
+            ("x", "model"),
+            '{\n  "x": { "keep": true },\n  "y": {\n    "z": 1\n  }\n}\n',
+        ),
+        (
+            '{\n  "x": 1,\n  "y": {\n    "z": 1\n  }\n}\n',
+            ("y",),
+            '{\n  "x": 1\n}\n',
+        ),
+    ],
+)
+def test_remove_member_takes_the_comma_and_leaves_valid_text(source, path, expected):
+    root = jsonc.parse(source)
+    parent = root.find(*path[:-1])
+    result = jsonc.remove_member(source, parent, path[-1])
+    assert result == expected
+    jsonc.parse(result)

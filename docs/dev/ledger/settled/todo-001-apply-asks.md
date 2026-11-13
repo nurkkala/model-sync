@@ -1,17 +1,19 @@
 ---
 label: TODO-001-apply-asks
 title: "apply asks what to do with a setting that names a model no longer served"
-state: queued
+state: done
 added: 2026-11-13 13:30:36
+closed: 2026-11-13 13:34:52
 priority: 1
 ---
 
-*Added 2026-11-13 13:30:36.*
+*Added 2026-11-13 13:30:36 · done 2026-11-13 13:34:52.*
 
 A setting can name a model its provider has stopped serving. On 2026-11-13 opencode's
 `agents.title.model` named `ollama/qwen3:4b` after that model was removed from Ollama, and
-`diff` printed a warning about it on every run. README rule 4 says the tool checks such
-settings "and never edits them", so the remedy was a hand edit in another program's file.
+`diff` printed a warning about it on every run. README rule 4 then said the tool checks
+such settings "and never edits them", so the remedy was a hand edit in another program's
+file.
 
 #### Ruled 2026-11-13
 
@@ -39,11 +41,11 @@ settings "and never edits them", so the remedy was a hand edit in another progra
 - **Asking on every run with no exemption.** A model left unpulled for weeks would draw
   the same question at every `apply`.
 
-#### What it changes
+#### What it changed
 
-README rules 3 and 4 need rewording: on request, the tool will also edit the settings that
-name a model. `jsonc.py` has `replace_value` and no way to delete a member; removal needs
-one that handles the member's comma and a comment on its line.
+README rules 3 and 4 were reworded: on request, the tool now also edits the settings that
+name a model. `jsonc.py` had `replace_value` and no way to delete a member; removal got
+`remove_member`, which handles the member's comma and a comment on its line.
 
 #### Not in scope
 
@@ -53,3 +55,6 @@ one that handles the member's comma and a comment on its line.
 
 **Done when** — On a terminal, `model-sync apply` asks about a stale `agents.title.model` in a test fixture and each of the three answers (replace, remove, leave) produces the file the answer describes, with a backup; with stdin not a terminal the same run prints the warning and edits no setting; a stale setting whose model has a table in the index draws the warning and no question. `make check` passes.
 
+*2026-11-13 13:32:33 — started.* Working area: consumers/ (a Reference with repoint and drop), jsonc.remove_member, plan (stale settings), cli apply (the question).
+
+*2026-11-13 13:34:52* — Built. `Consumer` gains `repoint`, `drop`, and `pending`; `jsonc.remove_member` deletes a member with its comma and the `//` comment that closes its line. Tried on a pseudo-terminal against a copy of a real `opencode.jsonc`: the question appears, `r` removes `agents.title.model`, and the file still parses. Two readings taken where the rulings were silent: removing an agent's sole key leaves the agent's block in place as `{ }`, and end-of-input at the question aborts the run with that consumer's file unwritten.

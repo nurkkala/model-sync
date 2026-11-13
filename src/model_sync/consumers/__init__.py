@@ -5,7 +5,9 @@ decorating the class with `@consumer("<kind>")`, and importing the module at the
 of this file.
 
 A consumer owns exactly one thing in its file: the model list of each provider it is
-handed. Every other key belongs to the file's owner and is left as it was.
+handed. Every other key belongs to the file's owner and is left as it was, with one
+exception made on request: a setting that names a model no longer served can be
+repointed or dropped when `apply` asks and its owner says so.
 """
 
 from __future__ import annotations
@@ -16,6 +18,7 @@ import stat
 import tempfile
 from abc import ABC, abstractmethod
 from collections.abc import Callable
+from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
 from typing import Any
@@ -28,12 +31,25 @@ class ConsumerError(Exception):
     """This consumer's file cannot be read or edited; the others can still be planned."""
 
 
+@dataclass(frozen=True)
+class Reference:
+    """A setting that names a model: where it is, and what it names."""
+
+    where: str
+    provider_id: str
+    model_id: str
+    # The consumer's own handle on the setting, for `repoint` and `drop`.
+    key: Any = None
+
+
 class Consumer(ABC):
     kind: str
 
     def __init__(self, name: str, config: ConsumerConfig) -> None:
         self.name = name
         self.path = config.path.expanduser()
+        # Set by `repoint` and `drop`, so that the file is written for them alone.
+        self.settings_edited = False
 
     @abstractmethod
     def load(self) -> None:
@@ -54,16 +70,34 @@ class Consumer(ABC):
         """Make `entries` the provider's whole model list, in memory."""
 
     @abstractmethod
-    def references(self) -> list[tuple[str, str, str]]:
-        """Settings that name a model, as (where, provider id, model id)."""
+    def references(self) -> list[Reference]:
+        """The settings that name a model."""
+
+    @abstractmethod
+    def repoint(self, reference: Reference, provider_id: str, model_id: str) -> None:
+        """Make the setting name another model, in memory."""
+
+    @abstractmethod
+    def drop(self, reference: Reference) -> None:
+        """Delete the setting, in memory."""
 
     @abstractmethod
     def text(self) -> str:
         """The file as it would be written."""
 
+    def pending(self, models_changed: bool) -> list[tuple[Path, str]]:
+        """The files to write, each with its new text."""
+        if models_changed or self.settings_edited:
+            return [(self.path, self.text())]
+        return []
+
     def save(self, backup_dir: Path) -> Path | None:
         """Write the staged file. Returns the backup made of the one it replaced, if any."""
-        target = self.path.resolve()  # write through a symlink, never over it
+        return self.write(self.path, self.text(), backup_dir)
+
+    def write(self, path: Path, text: str, backup_dir: Path) -> Path | None:
+        """Replace `path` with `text`, atomically. Returns the backup of the old file, if any."""
+        target = path.resolve()  # write through a symlink, never over it
         backup = None
         mode = 0o600
         if target.exists():
@@ -80,7 +114,7 @@ class Consumer(ABC):
         )
         try:
             with os.fdopen(handle, "w") as out:
-                out.write(self.text())
+                out.write(text)
             os.chmod(temporary, mode)
             os.replace(temporary, target)
         except BaseException:

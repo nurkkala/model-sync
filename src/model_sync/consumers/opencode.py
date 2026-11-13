@@ -11,7 +11,13 @@ import json
 from typing import Any
 
 from model_sync import jsonc
-from model_sync.consumers import Consumer, ConsumerError, consumer, v1_url
+from model_sync.consumers import (
+    Consumer,
+    ConsumerError,
+    Reference,
+    consumer,
+    v1_url,
+)
 from model_sync.index import Provider
 from model_sync.resolve import Resolved
 
@@ -128,22 +134,37 @@ class Opencode(Consumer):
             )
         self._parse()
 
-    def references(self) -> list[tuple[str, str, str]]:
+    def references(self) -> list[Reference]:
         data = self.root.value
-        named = [("`model`", data.get("model"))]
+        named = [(("model",), data.get("model"))]
         agents = data.get("agents")
         if isinstance(agents, dict):
             named += [
-                (f"`agents.{name}.model`", agent.get("model"))
+                (("agents", name, "model"), agent.get("model"))
                 for name, agent in agents.items()
                 if isinstance(agent, dict)
             ]
         found = []
-        for where, value in named:
+        for path, value in named:
             if isinstance(value, str) and "/" in value:
                 provider_id, model_id = value.split("/", 1)
-                found.append((f"{where} in {self.path}", provider_id, model_id))
+                where = f"`{'.'.join(path)}` in {self.path}"
+                found.append(Reference(where, provider_id, model_id, path))
         return found
+
+    def repoint(self, reference: Reference, provider_id: str, model_id: str) -> None:
+        node = self.root.find(*reference.key)
+        self.source = jsonc.replace_value(
+            self.source, node, json.dumps(f"{provider_id}/{model_id}")
+        )
+        self._parse()
+        self.settings_edited = True
+
+    def drop(self, reference: Reference) -> None:
+        *parents, key = reference.key
+        self.source = jsonc.remove_member(self.source, self.root.find(*parents), key)
+        self._parse()
+        self.settings_edited = True
 
     def text(self) -> str:
         return self.source

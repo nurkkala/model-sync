@@ -187,3 +187,59 @@ def insert_member(text: str, parent: Node, key: str, rendered: str) -> str:
         # The comma goes directly after the last value, ahead of any comment on its line.
         head = head[: parent.last_end] + "," + head[parent.last_end :]
     return head + tail
+
+
+def _comma_after(text: str, pos: int) -> int | None:
+    """Where the comma that follows `pos` sits, past whitespace and comments; None if none."""
+    parser = _Parser(text)
+    parser.pos = pos
+    parser.skip()
+    return parser.pos if text.startswith(",", parser.pos) else None
+
+
+def remove_member(text: str, parent: Node, key: str) -> str:
+    """Delete the member `key` of the object `parent`, with its comma.
+
+    A member that has lines to itself takes those lines with it, along with a `//`
+    comment that closes its last line. A comment on a line of its own is left alone.
+    """
+    keys = list(parent.members)
+    member = parent.members[key]
+    start, end = member.key_start, member.node.end
+    cuts: list[tuple[int, int]] = []
+
+    comma = _comma_after(text, end)
+    if comma is not None:
+        if text[end:comma].strip():
+            cuts.append((comma, comma + 1))  # a comment sits between; keep it
+        else:
+            end = comma + 1
+    elif keys.index(key) > 0:
+        # The last member carried no comma, so the one before it gives its own up.
+        before = parent.members[keys[keys.index(key) - 1]].node.end
+        previous = _comma_after(text, before)
+        if previous is not None:
+            if text[previous + 1 : start].strip():
+                cuts.append((previous, previous + 1))
+            else:
+                start = previous
+
+    line_start = text.rfind("\n", 0, start) + 1
+    rest = re.match(r"[ \t]*(//[^\n]*)?", text[end:])
+    line_end = end + rest.end()
+    alone_before = not text[line_start:start].strip()
+    at_line_end = line_end == len(text) or text[line_end] == "\n"
+    if alone_before and at_line_end:
+        cuts.append((line_start, min(line_end + 1, len(text))))
+    elif at_line_end and text[start] == ",":
+        # The member closed a line it shared with the previous one's value.
+        cuts.append((start, line_end))
+    else:
+        # Inline among its siblings: take the spaces that followed it as well.
+        cuts.append((start, end + len(re.match(r"[ \t]*", text[end:]).group())))
+        if text[start] == "," and text[cuts[-1][1] : cuts[-1][1] + 1] == "}":
+            text = text[: cuts[-1][1]] + " " + text[cuts[-1][1] :]
+
+    for cut_start, cut_end in sorted(cuts, reverse=True):
+        text = text[:cut_start] + text[cut_end:]
+    return text

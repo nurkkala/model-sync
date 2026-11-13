@@ -11,7 +11,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
-from model_sync.consumers import CONSUMERS, Consumer, ConsumerError
+from model_sync.consumers import CONSUMERS, Consumer, ConsumerError, Reference
 from model_sync.index import Index
 from model_sync.probes import ProbeResult
 from model_sync.resolve import deep_merge, resolve
@@ -46,12 +46,25 @@ class ProviderPlan:
 
 
 @dataclass
+class Stale:
+    """A setting that names a model its provider answered without."""
+
+    reference: Reference
+    # The index has a table for the model, so its owner expects it back.
+    expected: bool
+
+
+@dataclass
 class ConsumerPlan:
     name: str
     kind: str
     path: Path
     providers: list[ProviderPlan] = field(default_factory=list)
     warnings: list[str] = field(default_factory=list)
+    stale: list[Stale] = field(default_factory=list)
+    # Every model served in this run, as (provider id, model id): what a stale setting
+    # can be repointed to.
+    live: list[tuple[str, str]] = field(default_factory=list)
     error: str | None = None
     consumer: Consumer | None = None
 
@@ -95,7 +108,7 @@ def plan_consumer(
             if provider.sync
         ]
     )
-    served: dict[str, set[str]] = {}
+    served: dict[str, list[str]] = {}
     for provider_id in managed:
         provider = index.providers[provider_id]
         result = probes[provider_id]
@@ -112,7 +125,7 @@ def plan_consumer(
             )
             for model in resolve(provider, result.models)
         }
-        served[provider_id] = set(entries)
+        served[provider_id] = list(entries)
         before = current or {}
         step = ProviderPlan(
             provider_id,
@@ -135,9 +148,19 @@ def plan_consumer(
                 plan.error = str(error)
                 return plan
 
-    for where, provider_id, model_id in consumer.references():
+    plan.live = [
+        (provider_id, model_id)
+        for provider_id in managed
+        for model_id in served.get(provider_id, [])
+    ]
+    for reference in consumer.references():
+        provider_id, model_id = reference.provider_id, reference.model_id
         if provider_id in served and model_id not in served[provider_id]:
+            expected = model_id in index.providers[provider_id].models
+            plan.stale.append(Stale(reference, expected))
             plan.warnings.append(
-                f"{where} names {provider_id}/{model_id}, which {provider_id} does not serve"
+                f"{reference.where} names {provider_id}/{model_id}, "
+                f"which {provider_id} does not serve"
+                + ("; the index has a table for it" if expected else "")
             )
     return plan

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import sys
 from pathlib import Path
 from typing import Annotated, Any
 
@@ -12,7 +13,7 @@ from rich.markup import escape
 
 from model_sync.consumers import CONSUMERS
 from model_sync.index import ConfigError, Index, config_path, load_index, state_dir
-from model_sync.plan import ABSENT, ConsumerPlan, plan_consumer
+from model_sync.plan import ABSENT, ConsumerPlan, Stale, plan_consumer
 from model_sync.probes import PROBES, ProbeResult, run_probe
 from model_sync.resolve import resolve
 from model_sync.version import report
@@ -211,17 +212,62 @@ def diff(
         raise typer.Exit(1)
 
 
+def _interactive() -> bool:
+    """Whether someone is there to answer: `apply` asks nothing of a pipe or a script."""
+    return sys.stdin.isatty()
+
+
+def _ask(plan: ConsumerPlan, stale: Stale) -> None:
+    """Ask what to do with one stale setting, and stage the answer."""
+    reference = stale.reference
+    out.print(
+        f"  [bold]{escape(reference.where)}[/bold] names "
+        f"{escape(reference.provider_id)}/{escape(reference.model_id)}. Replace it with:"
+    )
+    for number, (provider_id, model_id) in enumerate(plan.live, start=1):
+        out.print(f"    {number:>2}  {escape(provider_id)}/{escape(model_id)}")
+    out.print("     r  remove the setting")
+    out.print("     l  leave it as it is")
+    while True:
+        answer = typer.prompt("  choice", default="l").strip().lower()
+        if answer == "l":
+            return
+        if answer == "r":
+            plan.consumer.drop(reference)
+            out.print(f"  [red]removed[/red] {escape(reference.where)}")
+            return
+        if answer.isdigit() and 1 <= int(answer) <= len(plan.live):
+            provider_id, model_id = plan.live[int(answer) - 1]
+            plan.consumer.repoint(reference, provider_id, model_id)
+            out.print(
+                f"  [green]repointed[/green] {escape(reference.where)} "
+                f"to {escape(provider_id)}/{escape(model_id)}"
+            )
+            return
+        out.print(f"  [yellow]no such choice:[/yellow] {escape(answer)}")
+
+
 @app.command()
 def apply(consumers: ConsumerArgument = None, config: ConfigOption = None) -> None:
-    """Write the live model lists into each consumer's file, keeping a backup of each."""
+    """Write the live model lists into each consumer's file, keeping a backup of each.
+
+    On a terminal, also ask what to do with each setting that names a model no longer
+    served, unless the index has a table for that model.
+    """
     plans = _plans(_load(config), consumers)
     backups = state_dir() / "backups"
+    asking = _interactive()
     for plan in plans:
         _print_plan(plan)
-        if plan.error or not plan.has_changes:
+        if plan.error:
             continue
-        backup = plan.consumer.save(backups)
-        kept = f"; the previous file is {backup}" if backup else ""
-        out.print(f"  [green]wrote[/green] {escape(str(plan.path))}{escape(kept)}")
+        if asking:
+            for stale in plan.stale:
+                if not stale.expected:
+                    _ask(plan, stale)
+        for path, text in plan.consumer.pending(plan.has_changes):
+            backup = plan.consumer.write(path, text, backups)
+            kept = f"; the previous file is {backup}" if backup else ""
+            out.print(f"  [green]wrote[/green] {escape(str(path))}{escape(kept)}")
     if any(plan.error for plan in plans):
         raise typer.Exit(2)

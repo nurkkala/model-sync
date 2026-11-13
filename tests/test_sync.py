@@ -328,3 +328,141 @@ def test_a_provider_with_nothing_to_change_keeps_its_hand_formatting(run, root, 
     text = path.read_text()
     assert hand in text
     assert "new:3b" in text
+
+
+# --- `apply` asks about a setting that names a model no longer served (TODO-001-apply-asks)
+
+
+@pytest.fixture
+def answer(run, monkeypatch):
+    """Run `apply` as if on a terminal, typing `keys` at its questions."""
+    monkeypatch.setattr(cli, "_interactive", lambda: True)
+
+    def invoke(keys: str, *arguments: str):
+        return runner.invoke(cli.app, ["apply", *arguments], input=keys)
+
+    return invoke
+
+
+def _backups(root: Path, consumer: str) -> list[str]:
+    folder = root / "state" / "backups" / consumer
+    return sorted(path.name.split("-", 2)[2] for path in folder.iterdir())
+
+
+def test_replace_repoints_the_setting_and_nothing_around_it(answer, root):
+    result = answer("1\n", "opencode")
+    assert result.exit_code == 0, result.output
+    assert " 1  local/big:7b" in result.output and " 2  local/new:3b" in result.output
+    text = (root / "opencode.jsonc").read_text()
+    data = jsonc.parse(text).value
+    assert data["model"] == "local/big:7b"
+    # The title agent names a model on the unreachable gateway: unknown, so unasked.
+    assert data["agents"] == {"title": {"model": "gateway/remote-a"}}
+    assert result.output.count("choice") == 1
+    assert "// the owner's opening comment" in text
+    assert _backups(root, "opencode") == ["opencode.jsonc"]
+
+
+def test_remove_deletes_the_setting_and_leaves_valid_text(answer, root):
+    result = answer("r\n", "opencode")
+    assert result.exit_code == 0, result.output
+    text = (root / "opencode.jsonc").read_text()
+    data = jsonc.parse(text).value
+    assert "model" not in data
+    assert data["agents"] == {"title": {"model": "gateway/remote-a"}}
+    assert '// the owner\'s opening comment\n  "agents"' in text
+
+
+def test_leave_is_the_default_and_keeps_the_warning(answer, root):
+    result = answer("\n", "opencode")
+    assert result.exit_code == 0, result.output
+    assert jsonc.parse((root / "opencode.jsonc").read_text()).value["model"] == (
+        "local/gone:1b"
+    )
+    assert "warning:" in result.output
+
+
+def test_a_wrong_answer_is_asked_again(answer, root):
+    result = answer("9\nx\n2\n", "opencode")
+    assert result.exit_code == 0, result.output
+    assert "no such choice: 9" in result.output and "no such choice: x" in result.output
+    assert jsonc.parse((root / "opencode.jsonc").read_text()).value["model"] == (
+        "local/new:3b"
+    )
+
+
+def test_apply_off_a_terminal_warns_and_edits_no_setting(run, root):
+    result = run("apply", "opencode")
+    assert result.exit_code == 0, result.output
+    assert "warning:" in result.output and "choice" not in result.output
+    assert jsonc.parse((root / "opencode.jsonc").read_text()).value["model"] == (
+        "local/gone:1b"
+    )
+
+
+def test_a_model_the_index_names_draws_the_warning_and_no_question(
+    answer, root, probes
+):
+    # `big:7b` has a table in the index; here its provider answers without it.
+    probes["local"] = ProbeResult([Model(id="new:3b", context=4096, tools=True)])
+    path = root / "opencode.jsonc"
+    path.write_text(path.read_text().replace("local/gone:1b", "local/big:7b"))
+    result = answer("r\n", "opencode")
+    assert result.exit_code == 0, result.output
+    assert "the index has a table for it" in result.output
+    assert "choice" not in result.output
+    assert jsonc.parse(path.read_text()).value["model"] == "local/big:7b"
+
+
+def test_a_setting_is_written_when_the_models_are_already_current(answer, root):
+    assert answer("l\n", "opencode").exit_code == 0
+    path = root / "opencode.jsonc"
+    before = path.read_text()
+    result = answer("2\n", "opencode")
+    assert result.exit_code == 0, result.output
+    assert "up to date" in result.output and "wrote" in result.output
+    assert path.read_text() == before.replace("local/gone:1b", "local/new:3b")
+
+
+def test_pi_default_is_replaced_in_settings_json_with_a_backup(answer, root):
+    settings = root / "pi" / "settings.json"
+    settings.write_text(
+        json.dumps(
+            {"theme": "dark", "defaultProvider": "local", "defaultModel": "gone:1b"}
+        )
+    )
+    result = answer("1\n", "pi")
+    assert result.exit_code == 0, result.output
+    assert json.loads(settings.read_text()) == {
+        "theme": "dark",
+        "defaultProvider": "local",
+        "defaultModel": "big:7b",
+    }
+    assert list(json.loads(settings.read_text())) == [
+        "theme",
+        "defaultProvider",
+        "defaultModel",
+    ]
+    assert _backups(root, "pi") == ["models.json", "settings.json"]
+
+
+def test_pi_default_is_removed_and_the_rest_of_settings_kept(answer, root):
+    settings = root / "pi" / "settings.json"
+    settings.write_text(
+        json.dumps(
+            {"theme": "dark", "defaultProvider": "local", "defaultModel": "gone:1b"}
+        )
+    )
+    result = answer("r\n", "pi")
+    assert result.exit_code == 0, result.output
+    assert json.loads(settings.read_text()) == {"theme": "dark"}
+
+
+def test_pi_settings_are_untouched_when_the_answer_is_leave(answer, root):
+    settings = root / "pi" / "settings.json"
+    written = json.dumps({"defaultProvider": "local", "defaultModel": "gone:1b"})
+    settings.write_text(written)
+    result = answer("l\n", "pi")
+    assert result.exit_code == 0, result.output
+    assert settings.read_text() == written
+    assert _backups(root, "pi") == ["models.json"]
