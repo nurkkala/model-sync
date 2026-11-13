@@ -1,0 +1,29 @@
+[project]
+name = "model-sync"
+version = "0.1.0"
+description = "Probe model providers and write the models they serve into each coding agent's configuration"
+readme = "README.md"
+authors = [{ name = "Tom Nurkkala", email = "tom.nurkkala@gmail.com" }]
+requires-python = ">=3.12"
+dependencies = [
+    "httpx>=0.28.1",
+    "pydantic>=2.12.5",
+    "rich>=14.2.0",
+    "typer>=0.20.1",
+]
+
+[dependency-groups]
+dev = [
+    "pytest>=9.0.2",
+    "ruff>=0.15.22",
+]
+
+[project.scripts]
+model-sync = "model_sync.cli:app"
+
+[tool.ruff.lint]
+extend-select = ["I"]
+
+[build-system]
+requires = ["uv_build>=0.9.18,<0.14.0"]
+build-backend = "uv_build"
