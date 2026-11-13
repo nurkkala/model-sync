@@ -82,3 +82,21 @@ def test_deep_merge_copies_and_replaces_non_tables():
     assert merged == {"t": {"x": [1], "y": 2}, "s": {"now": "a table"}}
     merged["t"]["x"].append(2)
     assert base == {"t": {"x": [1]}, "s": 1}
+
+
+def test_a_provider_context_caps_the_window_and_a_model_override_still_wins():
+    probed = [
+        Model(id="big", context=4096, max_input=4096),
+        Model(id="mine", context=4096),
+        Model(id="silent"),
+        Model(id="small", context=512, max_input=512),
+    ]
+    big, mine, silent, small = sorted(
+        resolve(provider(context=1000, models={"mine": {"context": 2000}}), probed),
+        key=lambda model: model.id,
+    )
+    assert (big.context, big.max_input) == (1000, 1000)
+    assert mine.context == 2000
+    # The cap stands in for a window nobody reported, and invents no input limit.
+    assert (silent.context, silent.max_input) == (1000, None)
+    assert (small.context, small.max_input) == (512, 512)

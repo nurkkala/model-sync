@@ -82,13 +82,15 @@ A provider takes these keys:
 | `timeout` | Seconds to wait for each answer (default 5) |
 | `exclude` | Glob patterns of model ids to leave out |
 | `max_output` | Output limit for every model without one of its own |
+| `context` | The window the server runs its models with. A model is written with the smaller of this and the context it reports, and its reported input limit is held to the same number. |
 | `extra.<consumer kind>` | Keys merged into every model entry written for that kind of consumer |
 | `reasoning_extra.<consumer kind>` | The same, for models that reason |
 | `models."<id>"` | Corrections for one model |
 
 A model table takes `name`, `context`, `max_input`, `max_output`, `vision`, `tools`,
 `reasoning`, and `extra.<consumer kind>`. An output limit is chosen in this order: the
-model's `max_output`, the provider's `max_output`, the reported value. A model with no
+model's `max_output`, the provider's `max_output`, the reported value. A model's own
+`context` is written as given, above the provider's `context` when it says so. A model with no
 word on a flag is written as able to call tools, unable to see images, and without
 reasoning.
 
@@ -189,8 +191,10 @@ file, as pi's do, also overrides `pending` to name that file when it has been ed
 
 ## Limits
 
-- The context window reported for an Ollama model is the model's maximum. Ollama serves
-  the window set by `num_ctx`, which may be smaller.
+- The context window reported for an Ollama model is the model's maximum. Ollama runs a
+  model with the window set by `num_ctx` or by the server's default, which may be
+  smaller. `ollama ps` shows the running window of a loaded model; set the provider's
+  `context` to that number.
 - A LiteLLM gateway reports whatever its operator typed. A gateway that repeats its input
   limit as its output limit needs `max_output` set in the index.
 - A provider carries one id, used in the index and in every consumer's file. A consumer

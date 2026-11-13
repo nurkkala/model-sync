@@ -46,6 +46,13 @@ def _first(*values: Any) -> Any:
     return next((value for value in values if value is not None), None)
 
 
+def _capped(reported: int | None, cap: int | None) -> int | None:
+    """The reported value held to the provider's cap; the cap itself when nothing is reported."""
+    if reported is None or cap is None:
+        return _first(reported, cap)
+    return min(reported, cap)
+
+
 def resolve(provider: Provider, probed: list[Model]) -> list[Resolved]:
     """Lay the index over the probe. Models the index names come first, in its order."""
     by_id = {model.id: model for model in probed}
@@ -78,8 +85,15 @@ def resolve(provider: Provider, probed: list[Model]) -> list[Resolved]:
             Resolved(
                 id=model_id,
                 name=_first(over.name, found.name, derived_name(model_id)),
-                context=_first(over.context, found.context),
-                max_input=_first(over.max_input, found.max_input),
+                # A model's own override is the last word, so it may exceed the cap. No
+                # input limit is invented for a model that reports none.
+                context=_first(over.context, _capped(found.context, provider.context)),
+                max_input=_first(
+                    over.max_input,
+                    None
+                    if found.max_input is None
+                    else _capped(found.max_input, provider.context),
+                ),
                 # The provider-wide default is an index value too, so it also beats the probe.
                 max_output=_first(
                     over.max_output, provider.max_output, found.max_output

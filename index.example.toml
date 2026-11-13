@@ -16,6 +16,10 @@ name = "Ollama (this machine)"
 # Ollama reports no output limit, so every model here gets this one unless it names its own.
 max_output = 16384
 
+# Ollama reports each model's largest window and may run it with a smaller one. `ollama ps`
+# shows the running window of a loaded model; no model here is written with more than this.
+context = 131072
+
 # Embedding models are dropped already; this leaves out anything else by id.
 exclude = ["*:cloud"]
 

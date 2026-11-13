@@ -62,6 +62,10 @@ class Provider(BaseModel):
     exclude: list[str] = Field(default_factory=list)
     # Output limit for every model here that has no override of its own.
     max_output: int | None = None
+    # The window the server runs its models with, where that is smaller than what a
+    # model reports: no model here is written with a larger context or input limit,
+    # unless its own override says so.
+    context: int | None = Field(default=None, gt=0)
     # Consumer kind -> keys merged into every model entry (`extra`), or into the entries
     # of models that reason (`reasoning_extra`).
     extra: dict[str, dict[str, Any]] = Field(default_factory=dict)
