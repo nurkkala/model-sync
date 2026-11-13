@@ -1,12 +1,13 @@
 ---
 label: OPEN-004-provider-id-alias
 title: "Should a consumer be able to call a provider by another id?"
-state: open
+state: ruled-no
 added: 2026-11-13 13:30:37
+closed: 2026-11-13 13:40:54
 priority: 4
 ---
 
-*Added 2026-11-13 13:30:37.*
+*Added 2026-11-13 13:30:37 · ruled no 2026-11-13 13:40:54.*
 
 A provider has one id. Its key under `[providers]` in the index is also its key under
 `providers` in every consumer's file and the prefix of every `provider/model` setting.
@@ -29,3 +30,5 @@ today.
 Rule no for now. Renaming a block is a one-time edit, and the map touches every method of
 every consumer. Reopen on the first file where the rename is not free: one whose other
 settings, or another tool, refer to the provider by the old name.
+
+*2026-11-13 13:40:54* — Ruled no 2026-11-13. Renaming a provider's block in a consumer's file is a one-time hand edit, and a per-consumer id map touches every method of every consumer. Reopen on the first file where the rename is not free, because other settings in it, or another tool, refer to the provider by the old name.

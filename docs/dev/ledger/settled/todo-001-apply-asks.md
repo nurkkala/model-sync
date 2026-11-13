@@ -58,3 +58,5 @@ name a model. `jsonc.py` had `replace_value` and no way to delete a member; remo
 *2026-11-13 13:32:33 — started.* Working area: consumers/ (a Reference with repoint and drop), jsonc.remove_member, plan (stale settings), cli apply (the question).
 
 *2026-11-13 13:34:52* — Built. `Consumer` gains `repoint`, `drop`, and `pending`; `jsonc.remove_member` deletes a member with its comma and the `//` comment that closes its line. Tried on a pseudo-terminal against a copy of a real `opencode.jsonc`: the question appears, `r` removes `agents.title.model`, and the file still parses. Two readings taken where the rulings were silent: removing an agent's sole key leaves the agent's block in place as `{ }`, and end-of-input at the question aborts the run with that consumer's file unwritten.
+
+*2026-11-13 13:42:12* — Two readings in the note above were later ruled the other way: TODO-006-empty-block removes the block a removal empties, and TODO-007-eof-leaves makes end of input answer leave.

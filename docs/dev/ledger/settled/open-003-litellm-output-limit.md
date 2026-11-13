@@ -1,12 +1,13 @@
 ---
 label: OPEN-003-litellm-output-limit
 title: "Should the tool notice a LiteLLM gateway that repeats its input limit as its output limit?"
-state: open
+state: ruled-no
 added: 2026-11-13 13:30:37
+closed: 2026-11-13 13:40:54
 priority: 3
 ---
 
-*Added 2026-11-13 13:30:37.*
+*Added 2026-11-13 13:30:37 · ruled no 2026-11-13 13:40:54.*
 
 The `litellm` probe takes a model's output limit from `max_output_tokens` in
 `/model/info`, which holds whatever the gateway's operator typed. A gateway in use on
@@ -32,3 +33,5 @@ Option 1. It changes no file and points at the exact line to add. Rule no instea
 gateway above stays the one LiteLLM provider in the index: its override is already
 written, and a warning that can never fire again is code to carry for nothing. The first
 second gateway is the reopening condition.
+
+*2026-11-13 13:40:54* — Ruled no 2026-11-13. The one LiteLLM gateway in the index already carries its `max_output` override, so the warning of option 1 could not fire again. Reopen when a second `litellm` provider enters an index: that is the first moment an owner can meet the wrong limit without having been told.
