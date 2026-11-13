@@ -162,3 +162,6 @@ Backups and the atomic write are inherited.
 `make` lists the targets. `make check` runs the linter and the tests; no test reaches a
 real server or a real configuration file. `make install` puts `model-sync` on `PATH` as
 an editable install, and the installed command runs the checkout.
+
+Planned work and the rulings behind the tool live in `docs/dev/ledger/`, one ticket per
+file. `make todo` lists what is pending.

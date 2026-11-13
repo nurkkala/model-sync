@@ -36,7 +36,7 @@ help:  ## List these targets (what plain `make` does)
 	     }' $(MAKEFILE_LIST)
 
 .PHONY: check
-check: lint test  ## Lint and the tests
+check: lint test  ## Lint and the tests, which include the ledger's own check
 
 .PHONY: test
 test:  ## The test suite
@@ -59,6 +59,16 @@ install:  ## Put `model-sync` on PATH from this checkout
 .PHONY: uninstall
 uninstall:  ## Remove the installed `model-sync`
 	uv tool uninstall model-sync
+
+# --- The ledger
+
+.PHONY: todo
+todo:  ## What is pending in the ledger, and for how long
+	@uv run roadmap status
+
+.PHONY: todo-details
+todo-details:  ## The same, with each ticket's opening paragraph, through your pager
+	@uv run roadmap status --details
 
 # --- Running it against the real index
 
