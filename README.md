@@ -92,6 +92,9 @@ restricts what the consumer receives. Without it a consumer receives every provi
 
 An unknown key anywhere in the index is an error that shows the key.
 
+[`index.example.toml`](index.example.toml) is a commented index to copy and change. A test
+loads it, so it stays true to the schema.
+
 ## Provider kinds
 
 | Kind | Asks | Learns |

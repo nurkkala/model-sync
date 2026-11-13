@@ -1,0 +1,67 @@
+# A starting point for ~/.config/model-sync/index.toml: which servers to ask for models,
+# and which files to write the answers into. Copy it, then change the providers and paths
+# to match the machine. `model-sync status` asks, `model-sync diff` shows what would
+# change, `model-sync apply` writes.
+#
+# A value written here beats what a provider reports. A model a provider serves needs no
+# entry: it appears with the reported values and a name made from its id.
+
+# --- Providers
+
+[providers.ollama]
+kind = "ollama"
+base_url = "http://127.0.0.1:11434"   # the server's root, without /v1
+name = "Ollama (this machine)"
+
+# Ollama reports no output limit, so every model here gets this one unless it names its own.
+max_output = 16384
+
+# Embedding models are dropped already; this leaves out anything else by id.
+exclude = ["*:cloud"]
+
+# Keys merged into every reasoning model written to an opencode file.
+[providers.ollama.reasoning_extra.opencode]
+compatibility = { reasoningField = "reasoning" }
+
+# One table per model to correct. A table for a model that is not pulled does no harm, and
+# gives the model its name and limit back when it returns.
+[providers.ollama.models."qwen3:4b"]
+name = "Qwen3 4B"
+max_output = 8192
+
+[providers.gateway]
+kind = "litellm"
+base_url = "http://127.0.0.1:4000"
+name = "LiteLLM gateway"
+timeout = 10
+
+# A literal key, `$NAME` or `${NAME}` from the environment, or `!command` whose output is
+# the key.
+api_key = "$GATEWAY_KEY"
+
+# Set this where the gateway repeats its input limit as its output limit.
+max_output = 32768
+
+[providers.gateway.models.big-model]
+name = "Big Model (gateway)"
+context = 131072
+vision = true
+
+# A cloud provider with a key, shown by `status` and written to no consumer, since pi and
+# opencode both carry their own catalogs of cloud models.
+[providers.cloud]
+kind = "openai"
+base_url = "https://api.example.com"
+api_key = "!security find-generic-password -s example-api -w"
+sync = false
+
+# --- Consumers
+
+[consumers.pi]
+kind = "pi"
+path = "~/.pi/agent/models.json"
+
+[consumers.opencode]
+kind = "opencode"
+path = "~/.config/opencode/opencode.jsonc"
+providers = ["ollama"]   # optional: without it a consumer receives every syncing provider
