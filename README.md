@@ -144,13 +144,17 @@ consumer receives, and takes one of three answers for each stale setting:
 | `r` | The setting is deleted, and the agent falls back to its own default |
 | `l`, or Enter | The setting stays, and the warning returns at the next run |
 
+Input that ends at a question (Ctrl-D) answers `l` to it and to every question after it,
+so the model lists are still written. Ctrl-C stops the run.
+
 A model with a table in the index draws the warning and no question. The table says you
 expect the model back, as with one that is pulled and removed by turns. Delete the table
 to be asked.
 
 In an opencode file the edit replaces the setting's value or deletes its member, and
-every comment outside that member survives. Removing `agents.<name>.model` leaves the
-agent's block in place, empty when the model was all it held. pi keeps its default in
+every comment outside that member survives. Removing `agents.<name>.model` from an agent
+that held nothing else removes the agent's block, and removes `agents` after its last
+agent. A comment on a line of its own above the removed text stays where it was. pi keeps its default in
 `settings.json` beside `models.json`. The tool rewrites that file with `defaultProvider`
 and `defaultModel` changed or removed and every other key kept in order; the file's hand
 formatting is lost.

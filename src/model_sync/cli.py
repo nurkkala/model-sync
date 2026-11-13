@@ -217,8 +217,12 @@ def _interactive() -> bool:
     return sys.stdin.isatty()
 
 
-def _ask(plan: ConsumerPlan, stale: Stale) -> None:
-    """Ask what to do with one stale setting, and stage the answer."""
+def _ask(plan: ConsumerPlan, stale: Stale) -> bool:
+    """Ask what to do with one stale setting, and stage the answer.
+
+    False when input ended at the question: that answers "leave" here and for every
+    question after it, so the model lists are still written. Ctrl-C stops the run.
+    """
     reference = stale.reference
     out.print(
         f"  [bold]{escape(reference.where)}[/bold] names "
@@ -229,13 +233,21 @@ def _ask(plan: ConsumerPlan, stale: Stale) -> None:
     out.print("     r  remove the setting")
     out.print("     l  leave it as it is")
     while True:
-        answer = typer.prompt("  choice", default="l").strip().lower()
+        out.print("  choice \\[l]: ", end="")
+        try:
+            answer = input().strip().lower() or "l"
+        except EOFError:
+            out.print()
+            out.print(
+                "  [dim]input ended; every remaining setting is left as it is[/dim]"
+            )
+            return False
         if answer == "l":
-            return
+            return True
         if answer == "r":
             plan.consumer.drop(reference)
             out.print(f"  [red]removed[/red] {escape(reference.where)}")
-            return
+            return True
         if answer.isdigit() and 1 <= int(answer) <= len(plan.live):
             provider_id, model_id = plan.live[int(answer) - 1]
             plan.consumer.repoint(reference, provider_id, model_id)
@@ -243,7 +255,7 @@ def _ask(plan: ConsumerPlan, stale: Stale) -> None:
                 f"  [green]repointed[/green] {escape(reference.where)} "
                 f"to {escape(provider_id)}/{escape(model_id)}"
             )
-            return
+            return True
         out.print(f"  [yellow]no such choice:[/yellow] {escape(answer)}")
 
 
@@ -261,10 +273,9 @@ def apply(consumers: ConsumerArgument = None, config: ConfigOption = None) -> No
         _print_plan(plan)
         if plan.error:
             continue
-        if asking:
-            for stale in plan.stale:
-                if not stale.expected:
-                    _ask(plan, stale)
+        for stale in plan.stale:
+            if asking and not stale.expected:
+                asking = _ask(plan, stale)
         for path, text in plan.consumer.pending(plan.has_changes):
             backup = plan.consumer.write(path, text, backups)
             kept = f"; the previous file is {backup}" if backup else ""

@@ -161,9 +161,18 @@ class Opencode(Consumer):
         self.settings_edited = True
 
     def drop(self, reference: Reference) -> None:
-        *parents, key = reference.key
-        self.source = jsonc.remove_member(self.source, self.root.find(*parents), key)
-        self._parse()
+        # An agent whose model was all it held is no longer configured at all, so the
+        # block the removal empties goes too, and `agents` after its last agent.
+        path = list(reference.key)
+        while True:
+            *parents, key = path
+            self.source = jsonc.remove_member(
+                self.source, self.root.find(*parents), key
+            )
+            self._parse()
+            if not parents or self.root.find(*parents).members:
+                break
+            path = parents
         self.settings_edited = True
 
     def text(self) -> str:

@@ -466,3 +466,51 @@ def test_pi_settings_are_untouched_when_the_answer_is_leave(answer, root):
     assert result.exit_code == 0, result.output
     assert settings.read_text() == written
     assert _backups(root, "pi") == ["models.json"]
+
+
+def test_removing_an_agents_one_key_removes_the_block_and_then_agents(
+    answer, root, probes
+):
+    # Both providers answer, so both settings are stale, and neither model is served.
+    probes["gateway"] = ProbeResult([Model(id="remote-b")])
+    result = answer("l\nr\n", "opencode")
+    assert result.exit_code == 0, result.output
+    text = (root / "opencode.jsonc").read_text()
+    data = jsonc.parse(text).value
+    assert "agents" not in data and data["model"] == "local/gone:1b"
+    assert "// the owner's opening comment" in text
+
+
+def test_an_agent_holding_other_keys_keeps_its_block(answer, root, probes):
+    probes["gateway"] = ProbeResult([Model(id="remote-b")])
+    path = root / "opencode.jsonc"
+    path.write_text(
+        path.read_text().replace(
+            '{ "title": { "model": "gateway/remote-a" } }',
+            '{ "title": { "model": "gateway/remote-a", "temperature": 0 },'
+            ' "other": { "model": "gateway/remote-a" } }',
+        )
+    )
+    result = answer("l\nr\nr\n", "opencode")
+    assert result.exit_code == 0, result.output
+    assert jsonc.parse(path.read_text()).value["agents"] == {
+        "title": {"temperature": 0}
+    }
+
+
+def test_input_ending_at_the_question_leaves_settings_and_still_writes(answer, root):
+    settings = root / "pi" / "settings.json"
+    written = json.dumps({"defaultProvider": "local", "defaultModel": "gone:1b"})
+    settings.write_text(written)
+    result = answer("")
+    assert result.exit_code == 0, result.output
+    # One question, at the first consumer; none at the second.
+    assert result.output.count("choice") == 1
+    assert "input ended" in result.output
+    assert settings.read_text() == written
+    assert jsonc.parse((root / "opencode.jsonc").read_text()).value["model"] == (
+        "local/gone:1b"
+    )
+    pi = json.loads((root / "pi" / "models.json").read_text())
+    assert "new:3b" in [model["id"] for model in pi["providers"]["local"]["models"]]
+    assert "new:3b" in (root / "opencode.jsonc").read_text()
