@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import json
-from importlib.metadata import version
 from pathlib import Path
 from typing import Annotated, Any
 
@@ -16,6 +15,7 @@ from model_sync.index import ConfigError, Index, config_path, load_index, state_
 from model_sync.plan import ABSENT, ConsumerPlan, plan_consumer
 from model_sync.probes import PROBES, ProbeResult, run_probe
 from model_sync.resolve import resolve
+from model_sync.version import report
 
 app = typer.Typer(
     no_args_is_help=True,
@@ -39,7 +39,8 @@ ConsumerArgument = Annotated[
 
 def _version(show: bool) -> None:
     if show:
-        out.print(version("model-sync"))
+        for line in report():
+            typer.echo(line)
         raise typer.Exit()
 
 
@@ -48,7 +49,10 @@ def main(
     _: Annotated[
         bool,
         typer.Option(
-            "--version", callback=_version, is_eager=True, help="Print the version."
+            "--version",
+            callback=_version,
+            is_eager=True,
+            help="Print the version and the code behind it, and exit.",
         ),
     ] = False,
 ) -> None:
