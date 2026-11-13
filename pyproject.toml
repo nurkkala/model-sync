@@ -1,6 +1,6 @@
 [project]
 name = "model-sync"
-version = "0.1.0"
+version = "0.2.0"
 description = "Probe model providers and write the models they serve into each coding agent's configuration"
 readme = "README.md"
 authors = [{ name = "Tom Nurkkala", email = "tom.nurkkala@gmail.com" }]
